@@ -1,0 +1,107 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  RDS for  MySQL Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: "Project Name Prefix"
+        Parameters:
+          - PJPrefix
+      - Label:
+          default: "RDS Configuration"
+        Parameters:
+          - DBInstanceName
+          - DBName
+    ParameterLabels:
+      DBInstanceName:
+        default: "DBInstanceName"
+      DBName:
+        default: "DBName"
+
+# お品書き
+Parameters:
+  PJPrefix:
+    Type: String
+  DBInstanceName:
+    Type: String
+    Default: "rds"
+  DBName:
+    Type: String
+    Default: "db"
+
+# 各種設定
+Resources: 
+
+# DB
+  DBInstance: 
+    Type: "AWS::RDS::DBInstance"
+    Properties: 
+      DBInstanceIdentifier: !Sub "${PJPrefix}-${DBInstanceName}"
+      Engine: MySQL
+      EngineVersion: 5.7.23
+      DBInstanceClass: db.t2.micro
+      AllocatedStorage: 20
+      StorageType: gp2
+      DBName: !Ref DBName
+      MasterUsername: '{{resolve:secretsmanager:MyRDSSecret:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:MyRDSSecret:SecretString:password}}'
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      PubliclyAccessible: false
+      MultiAZ: false
+      MonitoringInterval: 0
+      AutoMinorVersionUpgrade: false
+      DBParameterGroupName: hoge
+      OptionGroupName: default:mysql-5-7
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      CopyTagsToSnapshot: false
+      BackupRetentionPeriod: 1
+      Tags: 
+        - Key: "Name"
+          Value: !Ref DBInstanceName
+    DeletionPolicy: "Delete"
+
+#  RDSセキュリティグループ
+  RDSSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-${DBInstanceName}-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-${DBInstanceName}-sg"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc-cidr" }
+
+# RDS用サブネットグループ
+  DBSubnetGroup: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupName: !Sub "${PJPrefix}-${DBInstanceName}-subnet"
+      DBSubnetGroupDescription: "-"
+      SubnetIds: 
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-private-subnet-a" }
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-private-subnet-c" }
+
+# 出力パラメータ
+Outputs:
+  DBInstanceID:
+    Value: !Ref DBInstance
+    Export:
+      Name: !Sub "${PJPrefix}-${DBInstanceName}-id"
+
+  DBInstanceEndpoint:
+    Value: !GetAtt DBInstance.Endpoint.Address
+    Export:
+      Name: !Sub "${PJPrefix}-${DBInstanceName}-endpoint"
+
+  DBName:
+    Value: !Ref DBName
+    Export:
+      Name: !Sub "${PJPrefix}-${DBInstanceName}-dbname"

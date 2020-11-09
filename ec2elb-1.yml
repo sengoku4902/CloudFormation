@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  ALB and EC2 Instance Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: "Project Name Prefix"
+        Parameters:
+          - PJPrefix
+      - Label:
+          default: "InternetALB Configuration"
+        Parameters:
+          - InternetALBName
+      - Label:
+          default: "EC2Instance Configuration"
+        Parameters:
+          - KeyPairName
+          - EC2InstanceName
+          - SSHAccessSourceIP
+
+    ParameterLabels:
+      InternetALBName:
+        default: "InternetALBName"
+      KeyPairName:
+        default: "KeyPairName"
+      EC2InstanceName:
+        default: "EC2 Name"
+      SSHAccessSourceIP:
+        default: "SSH AccessSourceIP"
+
+
+# お品書き
+Parameters:
+  PJPrefix:
+    Type: String
+
+#ALBの名前
+  InternetALBName:
+    Type: String
+    Default: "web"
+
+#EC2の名前
+  EC2InstanceName:
+    Type: String
+    Default: "web"
+  SSHAccessSourceIP:
+    Type: String
+
+Resources:
+
+#  EC2用IAMロール（S3フルアクセス）
+  EC2IAMRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: !Sub "${PJPrefix}-${EC2InstanceName}-role" 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: Allow
+            Principal: 
+              Service: 
+                - "ec2.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+
+  EC2InstanceProfile: 
+    Type: "AWS::IAM::InstanceProfile"
+    Properties: 
+      Path: "/"
+      Roles: 
+        - Ref: EC2IAMRole
+      InstanceProfileName: !Sub "${PJPrefix}-${EC2InstanceName}-profile"
+
+#　EC2インスタンス設定
+  EC2Instance:
+    Type: "AWS::EC2::Instance"
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-${EC2InstanceName}-01"
+      ImageId: ami-05e4cab2f00e7c66d
+      InstanceType: t2.micro
+      KeyName: hoge
+      Monitoring: false
+      InstanceInitiatedShutdownBehavior: stop
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref ManagedSecurityGroup
+        - !Ref WebSecurityGroup
+      SubnetId: { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-a" }
+
+#  SSH用セキュリティグループ設定
+  ManagedSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties: 
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-managed-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-managed-sg"
+
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAccessSourceIP
+
+#  ALB用セキュリティグループ
+  ALBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-alb-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-alb-sg"
+
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+
+#  HTTP用セキュリティグループ
+  WebSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-web-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-web-sg"
+
+  WebSecurityGroupIngress: 
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ ALBSecurityGroup, GroupId ] 
+      GroupId: !GetAtt [ WebSecurityGroup, GroupId ]
+
+#  ElasticIP
+  ElasticIP:
+    Type: "AWS::EC2::EIP"
+    Properties:
+      Domain: vpc
+
+  ElasticIPAssociate:
+    Type: AWS::EC2::EIPAssociation
+    Properties: 
+      AllocationId: !GetAtt ElasticIP.AllocationId
+      InstanceId: !Ref EC2Instance
+
+#  ALBのターゲットグループ設定
+  TargetGroup: 
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties: 
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" } 
+      Name: !Sub "${PJPrefix}-${InternetALBName}-tg"
+      Protocol: HTTP
+      Port: 80
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/"
+      HealthCheckPort: "traffic-port"
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      HealthCheckTimeoutSeconds: 5
+      HealthCheckIntervalSeconds: 10
+      Matcher: 
+        HttpCode: 200
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-${InternetALBName}-tg"
+      TargetGroupAttributes: 
+        - Key: "deregistration_delay.timeout_seconds"
+          Value: 300
+        - Key: "stickiness.enabled"
+          Value: false
+        - Key: "stickiness.type"
+          Value: lb_cookie
+        - Key: "stickiness.lb_cookie.duration_seconds"
+          Value: 86400
+      Targets: 
+        - Id: !Ref EC2Instance
+          Port: 80
+
+#  ALBインターネット設定
+  InternetALB: 
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties: 
+      Name: !Sub "${PJPrefix}-${InternetALBName}-alb"
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-${InternetALBName}-alb"
+      Scheme: "internet-facing"
+      LoadBalancerAttributes: 
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 60
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-a" }
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-c" }
+
+  ALBListener: 
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties: 
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref InternetALB
+      Port: 80
+      Protocol: HTTP
+
+# 出力パラメータ            
+Outputs:
+#インターネットALB
+  ALBDNSName:
+    Value: !GetAtt InternetALB.DNSName
+    Export:
+      Name: !Sub "${PJPrefix}-${InternetALBName}-alb-dnsname"
+     
+#EC2インスタンス
+  EC2InstanceID:
+    Value: !Ref EC2Instance
+    Export:
+      Name: !Sub "${PJPrefix}-${EC2InstanceName}-id"
+  EC2InstancePrivateIp:
+    Value: !GetAtt EC2Instance.PrivateIp
+    Export:
+      Name: !Sub "${PJPrefix}-${EC2InstanceName}-private-ip"
+  EC2InstanceEIP:
+    Value: !GetAtt EC2Instance.PublicIp
+    Export:
+      Name: !Sub "${PJPrefix}-${EC2InstanceName}-eip"
