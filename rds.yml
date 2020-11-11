@@ -29,7 +29,7 @@ Parameters:
     Default: "rds"
   DBName:
     Type: String
-    Default: "db"
+    Default: "sample_production"
 
 # 各種設定
 Resources: 
