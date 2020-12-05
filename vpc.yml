@@ -23,7 +23,7 @@ Resources:
   VPC: 
     Type: "AWS::EC2::VPC"
     Properties: 
-      CidrBlock: 10.0.10.0/16
+      CidrBlock: 10.0.0.0/16
       EnableDnsSupport: "true"
       EnableDnsHostnames: "true"
       InstanceTenancy: default
@@ -52,7 +52,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties: 
       AvailabilityZone: "ap-northeast-1a"
-      CidrBlock: 10.0.10.0/24
+      CidrBlock: 10.0.0.0/24
       VpcId: !Ref VPC 
       Tags: 
         - Key: Name
@@ -63,7 +63,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties: 
       AvailabilityZone: "ap-northeast-1c"
-      CidrBlock: 10.0.22.0/24
+      CidrBlock: 10.0.2.0/24
       VpcId: !Ref VPC 
       Tags: 
         - Key: Name
@@ -74,7 +74,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties: 
       AvailabilityZone: "ap-northeast-1a"
-      CidrBlock: 10.0.11.0/24
+      CidrBlock: 10.0.1.0/24
       VpcId: !Ref VPC 
       Tags: 
         - Key: Name
@@ -85,7 +85,7 @@ Resources:
     Type: "AWS::EC2::Subnet"
     Properties: 
       AvailabilityZone: "ap-northeast-1c"
-      CidrBlock: 10.0.33.0/24
+      CidrBlock: 10.0.3.0/24
       VpcId: !Ref VPC 
       Tags: 
         - Key: Name
@@ -183,7 +183,7 @@ Outputs:
       Name: !Sub "${PJPrefix}-vpc"
 
   VPCCIDR:
-    Value: 10.0.10.0/16
+    Value: 10.0.0.0/16
     Export:
       Name: !Sub "${PJPrefix}-vpc-cidr"
 
@@ -194,7 +194,7 @@ Outputs:
       Name: !Sub "${PJPrefix}-public-subnet-a"
 
   PublicSubnetACIDR:
-    Value: 10.0.10.0/24
+    Value: 10.0.1.0/24
     Export:
       Name: !Sub "${PJPrefix}-public-subnet-a-cidr"
 
@@ -204,7 +204,7 @@ Outputs:
       Name: !Sub "${PJPrefix}-public-subnet-c"
 
   PublicSubnetCCIDR:
-    Value: 10.0.22.0/24
+    Value: 10.0.2.0/24
     Export:
       Name: !Sub "${PJPrefix}-public-subnet-c-cidr"
 
@@ -214,7 +214,7 @@ Outputs:
       Name: !Sub "${PJPrefix}-private-subnet-a"
     
   PrivateSubnetACIDR:
-    Value: 10.0.11.0/24
+    Value: 10.0.1.0/24
     Export:
       Name: !Sub "${PJPrefix}-private-subnet-a-cidr"
 
@@ -224,7 +224,7 @@ Outputs:
       Name: !Sub "${PJPrefix}-private-subnet-c"
 
   PrivateSubnetCCIDR:
-    Value: 10.0.33.0/24
+    Value: 10.0.3.0/24
     Export:
       Name: !Sub "${PJPrefix}-private-subnet-c-cidr"
 
