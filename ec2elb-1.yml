@@ -162,7 +162,7 @@ Resources:
   ElasticIPAssociate:
     Type: AWS::EC2::EIPAssociation
     Properties: 
-      AllocationId: !GetAtt ElasticIP.AllocationId
+      EIP: 52.196.138.23
       InstanceId: !Ref EC2Instance
 
 #  ALBのターゲットグループ設定
